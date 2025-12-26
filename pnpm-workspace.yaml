@@ -1,0 +1,6 @@
+packages:
+  - "mcps/*"
+  - "benchmark"
+
+onlyBuiltDependencies:
+  - esbuild

@@ -1,0 +1,32 @@
+{
+  "name": "code-executor-mcp",
+  "version": "1.0.0",
+  "type": "module",
+  "bin": {
+    "code-executor-mcp": "./build/server.js"
+  },
+  "scripts": {
+    "gen": "tsx src/generate.ts",
+    "run": "tsx",
+    "build": "tsc",
+    "start": "node build/server.js",
+    "dev": "tsx src/server.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:e2e": "vitest run tests/e2e"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.5",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "^2.1.8",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^2.1.8"
+  }
+}

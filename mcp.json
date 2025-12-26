@@ -1,0 +1,14 @@
+{
+    "servers": {
+        "context7": {
+            "enabled": true,
+            "description": "Fetches up-to-date library documentation and code examples for any library/framework",
+            "transport": "stdio",
+            "command": "node",
+            "args": [
+                "mcps/context7-mcp/dist/index.js"
+            ],
+            "env": {}
+        }
+    }
+}

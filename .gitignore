@@ -1,0 +1,110 @@
+# --- Node & Package Managers ---
+node_modules/
+jspm_packages/
+bower_components/
+web_modules/               # Snowpack
+.pnpm-store/
+.npm/
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+.pnp.*
+.yarn-integrity
+.npmrc                     # optional: include if you don't commit it
+
+# --- Build & Compiler Outputs ---
+dist/
+build/
+out/
+lib/
+!mcps/context7-mcp/dist/
+!mcps/context7-mcp/dist/lib
+lib-cov/                   # jscoverage/JSCover
+.next/                     # Next.js
+.nuxt/                     # Nuxt.js
+.svelte-kit/               # SvelteKit
+.cache/                    # Parcel, Gatsby, VuePress v2, etc.
+.parcel-cache/             # Explicit Parcel cache
+.vitepress/dist/
+.vitepress/cache/
+.docusaurus/
+.temp/                     # VuePress v2 temp
+.vuepress/dist/            # VuePress v1
+.serverless/
+.fusebox/
+.nuxt
+
+# --- Logs & Debug Files ---
+logs/
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+vite.config.*.timestamp-*
+vitest.config.ts.timestamp-*
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# --- Diagnostic & Runtime Artifacts ---
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json  # Node.js diagnostic reports
+pids/
+*.pid
+*.pid.lock
+*.seed
+
+# --- Test & Coverage ---
+coverage/
+*.lcov
+.nyc_output/
+.vitest/
+
+# --- TypeScript & Linting ---
+*.tsbuildinfo
+.eslintcache
+.stylelintcache
+
+# --- Environment & Secrets ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- Local & Editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.vscode-test/
+
+# --- Misc Temporary & Cache ---
+tmp/
+temp/
+workspace/
+servers/
+.firebase/
+.dynamodb/
+.tern-port
+*.tgz                      # Output of `npm pack`
+.lock-wscript
+
+# --- Grunt ---
+.grunt/                    # Grunt task storage
+
+# --- Binary Addons ---
+build/Release/             # Node native addons
+
+# --- REPL & History ---
+.node_repl_history
+
+# --- Ignored ---
+_IGNORE/
+PLAN/
+PROBLEMS/
+_BAK/
