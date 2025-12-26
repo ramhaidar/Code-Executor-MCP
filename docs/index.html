@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>Code Executor MCP - Comprehensive Project Showcase</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <!-- Slide 1: Title -->
+    <div class="slide slide-title">
+        <h1>🚀 Code Executor MCP</h1>
+        <p class="tagline">A Meta-MCP Server for Token-Efficient AI Agent Workflows</p>
+        <p class="repo">github.com/ramhaidar/Code-Executor-MCP</p>
+    </div>
+
+    <!-- Slide 2: Key Result -->
+    <div class="slide slide-highlight">
+        <h2>📊 Key Result</h2>
+        <p class="big-number">97.6%</p>
+        <p class="big-label">Average Token Savings</p>
+        <p class="sub-note">Measured across multiple benchmark scenarios using tiktoken (cl100k_base encoding)</p>
+    </div>
+
+    <!-- Slide 3: The Problem Part 1 -->
+    <div class="slide slide-content">
+        <h2>The Problem: Token Inefficiency at Scale</h2>
+        <p>As Model Context Protocol (MCP) adoption scales, two critical patterns emerge that severely impact AI agent
+            efficiency:</p>
+
+        <div class="comparison-grid">
+            <div class="comparison-box direct">
+                <h3>❌ Problem 1: Context Window Overload</h3>
+                <ul>
+                    <li>Loading all tool definitions upfront consumes hundreds of thousands of tokens</li>
+                    <li>Each tool definition occupies context space before any work begins</li>
+                    <li>With thousands of tools, agents process massive token loads just to start</li>
+                    <li>Tool descriptions alone can consume 150,000+ tokens</li>
+                </ul>
+            </div>
+            <div class="comparison-box direct">
+                <h3>❌ Problem 2: Intermediate Result Bloat</h3>
+                <ul>
+                    <li>Every intermediate result passes through the model's context</li>
+                    <li>Data piped between tools gets processed twice unnecessarily</li>
+                    <li>Large documents (transcripts, spreadsheets) may exceed limits</li>
+                    <li>A 2-hour meeting transcript = 50,000+ extra tokens</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="slide-footer">
+            <span>Code Executor MCP</span>
+            <span>github.com/ramhaidar/Code-Executor-MCP</span>
+        </div>
+    </div>
+
+    <!-- Slide 4: The Solution Overview -->
+    <div class="slide slide-content">
+        <h2>The Solution: Code Execution with MCP</h2>
+        <p>Instead of calling MCP tools directly, AI agents write TypeScript code that imports auto-generated wrapper
+            files:</p>
+
+        <div class="feature-grid">
+            <div class="feature-box">
+                <h3>📂 Progressive Disclosure</h3>
+                <p>Load only the tools needed for the current task. No upfront loading of thousands of definitions.</p>
+            </div>
+            <div class="feature-box">
+                <h3>🔍 Context-Efficient Results</h3>
+                <p>Filter and aggregate data in code before returning. Process 10,000 rows, return only 5.</p>
+            </div>
+            <div class="feature-box">
+                <h3>🔄 Powerful Control Flow</h3>
+                <p>Leverage loops, conditionals, and error handling with familiar programming patterns.</p>
+            </div>
+            <div class="feature-box">
+                <h3>💾 State Persistence</h3>
+                <p>Write intermediate results to files, build reusable skills. Resume work across sessions.</p>
+            </div>
+        </div>
+
+        <div class="slide-footer">
+            <span>Code Executor MCP</span>
+            <span>github.com/ramhaidar/Code-Executor-MCP</span>
+        </div>
+    </div>
+
+    <!-- Slide 5: Architecture Overview -->
+    <div class="slide slide-content">
+        <h2>Architecture Overview</h2>
+        <p>Code Executor MCP acts as a meta-MCP server — it provides tools to execute TypeScript code that can call
+            other MCP servers:</p>
+
+        <div class="arch-flow">
+            <div class="arch-step">
+                <span class="num">1</span>
+                <span class="text">Agent sends<br>TypeScript code</span>
+            </div>
+            <div class="arch-arrow">→</div>
+            <div class="arch-step">
+                <span class="num">2</span>
+                <span class="text">Server compiles<br>& executes</span>
+            </div>
+            <div class="arch-arrow">→</div>
+            <div class="arch-step">
+                <span class="num">3</span>
+                <span class="text">Wrappers call<br>target MCPs</span>
+            </div>
+            <div class="arch-arrow">→</div>
+            <div class="arch-step">
+                <span class="num">4</span>
+                <span class="text">Only console.log<br>returns to agent</span>
+            </div>
+        </div>
+
+        <div class="arch-note">
+            <strong>Key insight:</strong> All intermediate data processing happens in code. Only final, filtered results
+            return to the model — avoiding context window bloat entirely.
+        </div>
+
+        <div class="slide-footer">
+            <span>Code Executor MCP</span>
+            <span>github.com/ramhaidar/Code-Executor-MCP</span>
+        </div>
+    </div>
+
+    <!-- Slide 6: Code Example - Before vs After -->
+    <div class="slide slide-content">
+        <h2>Direct Tool Calls vs Code Execution</h2>
+
+        <div class="two-columns">
+            <div class="column">
+                <h3 style="color: #c62828;">❌ Traditional Direct Approach</h3>
+                <div class="code-block">
+                    <span class="comment">// Each call passes through model context</span><br><br>
+                    <span class="function">TOOL CALL:</span> gdrive.getDocument(<br>
+                    &nbsp;&nbsp;documentId: <span class="string">"abc123"</span><br>
+                    )<br>
+                    <span class="comment">→ Returns full transcript (50K tokens)</span><br>
+                    <span class="comment">→ Loaded into model context</span><br><br>
+                    <span class="function">TOOL CALL:</span> salesforce.updateRecord(<br>
+                    &nbsp;&nbsp;objectType: <span class="string">"Lead"</span>,<br>
+                    &nbsp;&nbsp;data: { Notes: <span class="string">"[entire transcript]"</span> }<br>
+                    )<br>
+                    <span class="comment">→ Model rewrites entire transcript again</span>
+                </div>
+                <p style="color: #c62828; font-weight: 600; text-align: center;">Total: ~100,000 tokens</p>
+            </div>
+            <div class="column">
+                <h3 style="color: #2e7d32;">✅ Code Execution Approach</h3>
+                <div class="code-block">
+                    <span class="keyword">import</span> * <span class="keyword">as</span> gdrive <span
+                        class="keyword">from</span> <span class="string">'./servers/gdrive'</span>;<br>
+                    <span class="keyword">import</span> * <span class="keyword">as</span> sf <span
+                        class="keyword">from</span> <span class="string">'./servers/salesforce'</span>;<br><br>
+                    <span class="comment">// Data stays in execution environment</span><br>
+                    <span class="keyword">const</span> doc = <span class="keyword">await</span> gdrive.<span
+                        class="function">getDocument</span>({<br>
+                    &nbsp;&nbsp;documentId: <span class="string">"abc123"</span><br>
+                    });<br><br>
+                    <span class="keyword">await</span> sf.<span class="function">updateRecord</span>({<br>
+                    &nbsp;&nbsp;objectType: <span class="string">"Lead"</span>,<br>
+                    &nbsp;&nbsp;data: { Notes: doc.content }<br>
+                    });<br><br>
+                    console.<span class="function">log</span>(<span class="string">"Done!"</span>);
+                </div>
+                <p style="color: #2e7d32; font-weight: 600; text-align: center;">Total: ~200 tokens (99.8% savings)</p>
+            </div>
+        </div>
+
+        <div class="slide-footer">
+            <span>Code Executor MCP</span>
+            <span>github.com/ramhaidar/Code-Executor-MCP</span>
+        </div>
+    </div>
+
+    <!-- Slide 7: Benchmark Results -->
+    <div class="slide slide-content">
+        <h2>Benchmark Results</h2>
+
+        <table class="benchmark-table">
+            <thead>
+                <tr>
+                    <th>Scenario</th>
+                    <th class="num">Direct Tokens</th>
+                    <th class="num">Code Execution</th>
+                    <th class="num">Tokens Saved</th>
+                    <th class="num">Savings %</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Simple Tool Call</td>
+                    <td class="num">1,181</td>
+                    <td class="num">76</td>
+                    <td class="num">1,105</td>
+                    <td class="num highlight">93.6%</td>
+                </tr>
+                <tr>
+                    <td>Multi-Tool Workflow</td>
+                    <td class="num">11,763</td>
+                    <td class="num">198</td>
+                    <td class="num">11,565</td>
+                    <td class="num highlight">98.3%</td>
+                </tr>
+                <tr>
+                    <td>Data Filtering (10K rows)</td>
+                    <td class="num">697,287</td>
+                    <td class="num">650</td>
+                    <td class="num">696,637</td>
+                    <td class="num highlight">99.9%</td>
+                </tr>
+                <tr>
+                    <td>Loop Operations</td>
+                    <td class="num">15,970</td>
+                    <td class="num">226</td>
+                    <td class="num">15,744</td>
+                    <td class="num highlight">98.6%</td>
+                </tr>
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td><strong>Total</strong></td>
+                    <td class="num"><strong>726,201</strong></td>
+                    <td class="num"><strong>1,150</strong></td>
+                    <td class="num"><strong>725,051</strong></td>
+                    <td class="num highlight"><strong>99.8%</strong></td>
+                </tr>
+            </tfoot>
+        </table>
+
+        <p class="table-summary">This validates Anthropic's engineering claim of <strong>98%+ token savings</strong>.
+            Our measured average: <strong>97.6%</strong></p>
+
+        <div class="slide-footer">
+            <span>Code Executor MCP</span>
+            <span>Benchmarks use tiktoken cl100k_base encoding</span>
+        </div>
+    </div>
+
+    <!-- Slide 8: Token Breakdown Details -->
+    <div class="slide slide-content">
+        <h2>Token Breakdown by Scenario</h2>
+
+        <div class="breakdown-grid">
+            <div class="breakdown-column">
+                <h3>Simple Tool Call</h3>
+                <div class="breakdown-item">
+                    <span class="name">Tool Definition Tokens</span>
+                    <span class="value">1,079 → 34</span>
+                </div>
+                <div class="breakdown-item">
+                    <span class="name">Intermediate Result</span>
+                    <span class="value">102 → 0</span>
+                </div>
+                <div class="breakdown-item">
+                    <span class="name">Code Tokens</span>
+                    <span class="value">0 → 40</span>
+                </div>
+                <div class="breakdown-item">
+                    <span class="name">Final Result</span>
+                    <span class="value">— → 2</span>
+                </div>
+
+                <h3 style="margin-top: 25px;">Multi-Tool Workflow</h3>
+                <div class="breakdown-item">
+                    <span class="name">Tool Definition Tokens</span>
+                    <span class="value">1,079 → 89</span>
+                </div>
+                <div class="breakdown-item">
+                    <span class="name">Intermediate Results</span>
+                    <span class="value">10,684 → 0</span>
+                </div>
+                <div class="breakdown-item">
+                    <span class="name">Code Tokens</span>
+                    <span class="value">0 → 104</span>
+                </div>
+                <div class="breakdown-item">
+                    <span class="name">Final Result</span>
+                    <span class="value">— → 5</span>
+                </div>
+            </div>
+            <div class="breakdown-column">
+                <h3>Data Filtering (10K rows)</h3>
+                <div class="breakdown-item">
+                    <span class="name">Tool Definition Tokens</span>
+                    <span class="value">1,079 → 49</span>
+                </div>
+                <div class="breakdown-item">
+                    <span class="name">Intermediate Results</span>
+                    <span class="value">696,208 → 0</span>
+                </div>
+                <div class="breakdown-item">
+                    <span class="name">Code Tokens</span>
+                    <span class="value">0 → 98</span>
+                </div>
+                <div class="breakdown-item">
+                    <span class="name">Final Result</span>
+                    <span class="value">— → 503</span>
+                </div>
+
+                <h3 style="margin-top: 25px;">Loop Operations</h3>
+                <div class="breakdown-item">
+                    <span class="name">Tool Definition Tokens</span>
+                    <span class="value">1,079 → 56</span>
+                </div>
+                <div class="breakdown-item">
+                    <span class="name">Intermediate Results</span>
+                    <span class="value">14,891 → 0</span>
+                </div>
+                <div class="breakdown-item">
+                    <span class="name">Code Tokens</span>
+                    <span class="value">0 → 163</span>
+                </div>
+                <div class="breakdown-item">
+                    <span class="name">Final Result</span>
+                    <span class="value">— → 7</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="slide-footer">
+            <span>Code Executor MCP</span>
+            <span>github.com/ramhaidar/Code-Executor-MCP</span>
+        </div>
+    </div>
+
+    <!-- Slide 9: Key Features -->
+    <div class="slide slide-content">
+        <h2>Key Features</h2>
+
+        <div class="features-grid">
+            <div class="feature-item">
+                <span class="check">✓</span>
+                <span>18 built-in tools for code execution and MCP management</span>
+            </div>
+            <div class="feature-item">
+                <span class="check">✓</span>
+                <span>Auto-generated TypeScript wrappers for any MCP server</span>
+            </div>
+            <div class="feature-item">
+                <span class="check">✓</span>
+                <span>Skills system for building reusable knowledge packages</span>
+            </div>
+            <div class="feature-item">
+                <span class="check">✓</span>
+                <span>Comprehensive debugging and health check diagnostics</span>
+            </div>
+            <div class="feature-item">
+                <span class="check">✓</span>
+                <span>100% test coverage on core modules with Vitest</span>
+            </div>
+            <div class="feature-item">
+                <span class="check">✓</span>
+                <span>Auto-cleanup of MCP connections when code completes</span>
+            </div>
+            <div class="feature-item">
+                <span class="check">✓</span>
+                <span>TypeScript syntax validation before execution</span>
+            </div>
+            <div class="feature-item">
+                <span class="check">✓</span>
+                <span>Configurable timeout control for long-running tasks</span>
+            </div>
+            <div class="feature-item">
+                <span class="check">✓</span>
+                <span>Support for both static and dynamic imports</span>
+            </div>
+            <div class="feature-item">
+                <span class="check">✓</span>
+                <span>Workspace isolation for executed code file operations</span>
+            </div>
+        </div>
+
+        <div class="slide-footer">
+            <span>Code Executor MCP</span>
+            <span>github.com/ramhaidar/Code-Executor-MCP</span>
+        </div>
+    </div>
+
+    <!-- Slide 10: Available Tools - Discovery -->
+    <div class="slide slide-content">
+        <h2>Available Tools: Discovery & Execution</h2>
+
+        <div class="tools-grid">
+            <div class="tool-category">
+                <h3>🔍 Discovery Tools</h3>
+                <ul>
+                    <li><code>get_started</code> — Tutorial on workflow and patterns</li>
+                    <li><code>list_available_servers</code> — See servers with status</li>
+                    <li><code>list_servers</code> — List all server wrappers</li>
+                    <li><code>list_servers_metadata</code> — Overview with descriptions</li>
+                    <li><code>list_server_tools</code> — View tools and params</li>
+                    <li><code>get_tool_schema</code> — Full JSON schema for tool</li>
+                </ul>
+            </div>
+            <div class="tool-category">
+                <h3>⚡ Code Execution Tools</h3>
+                <ul>
+                    <li><code>execute_code</code> — Run TypeScript with MCP access</li>
+                    <li><code>run_script</code> — Execute saved scripts</li>
+                    <li><code>validate_code</code> — Check syntax without executing</li>
+                </ul>
+                <h3 style="margin-top: 20px;">📚 Skills Tools</h3>
+                <ul>
+                    <li><code>list_skills</code> — Available knowledge packages</li>
+                    <li><code>list_skills_metadata</code> — Quick skill overview</li>
+                    <li><code>read_skill</code> — Read skill documentation</li>
+                </ul>
+            </div>
+            <div class="tool-category">
+                <h3>📁 Workspace Tools</h3>
+                <ul>
+                    <li><code>list_workspace_files</code> — List files in workspace/</li>
+                    <li><code>read_workspace_file</code> — Read file contents</li>
+                    <li><code>list_scripts</code> — Available scripts</li>
+                </ul>
+            </div>
+            <div class="tool-category">
+                <h3>🔧 Diagnostics Tools</h3>
+                <ul>
+                    <li><code>check_server_health</code> — Diagnose config issues</li>
+                    <li><code>test_server_connection</code> — Test with timing</li>
+                    <li><code>get_server_stderr</code> — View error output</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="slide-footer">
+            <span>Code Executor MCP</span>
+            <span>18 tools total across 5 categories</span>
+        </div>
+    </div>
+
+    <!-- Slide 11: Recommended Workflow -->
+    <div class="slide slide-content">
+        <h2>Recommended Workflow</h2>
+
+        <div class="workflow-steps">
+            <div class="workflow-step">
+                <span class="step-num">1</span>
+                <div class="step-content">
+                    <strong>Start Session</strong>
+                    <span>Call <code>get_started</code> to learn correct import patterns and avoid common
+                        mistakes</span>
+                </div>
+            </div>
+            <div class="workflow-step">
+                <span class="step-num">2</span>
+                <div class="step-content">
+                    <strong>Discover Servers</strong>
+                    <span>Call <code>list_available_servers</code> to see what MCP servers are ready to use</span>
+                </div>
+            </div>
+            <div class="workflow-step">
+                <span class="step-num">3</span>
+                <div class="step-content">
+                    <strong>Explore Tools</strong>
+                    <span>Call <code>list_server_tools</code> with a server name to see available tools and
+                        parameters</span>
+                </div>
+            </div>
+            <div class="workflow-step">
+                <span class="step-num">4</span>
+                <div class="step-content">
+                    <strong>Get Details</strong>
+                    <span>Call <code>get_tool_schema</code> for full parameter schemas including enum values</span>
+                </div>
+            </div>
+            <div class="workflow-step">
+                <span class="step-num">5</span>
+                <div class="step-content">
+                    <strong>Execute Code</strong>
+                    <span>Call <code>execute_code</code> with TypeScript that imports from
+                        <code>../servers/</code></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="slide-footer">
+            <span>Code Executor MCP</span>
+            <span>github.com/ramhaidar/Code-Executor-MCP</span>
+        </div>
+    </div>
+
+    <!-- Slide 12: Import Patterns -->
+    <div class="slide slide-content">
+        <h2>Import Patterns & Common Mistakes</h2>
+
+        <div class="two-columns">
+            <div class="column">
+                <h3 style="color: #2e7d32;">✅ Correct Patterns</h3>
+                <div class="code-block">
+                    <span class="comment">// Pattern 1: Import entire server</span><br>
+                    <span class="keyword">import</span> * <span class="keyword">as</span> ctx7 <span
+                        class="keyword">from</span><br>
+                    &nbsp;&nbsp;<span class="string">'../servers/context7/index.js'</span>;<br>
+                    <span class="keyword">await</span> ctx7.resolveLibraryId.<span class="function">call</span>({<br>
+                    &nbsp;&nbsp;libraryName: <span class="string">"react"</span><br>
+                    });<br><br>
+
+                    <span class="comment">// Pattern 2: Import specific tool</span><br>
+                    <span class="keyword">import</span> { resolveLibraryId } <span class="keyword">from</span><br>
+                    &nbsp;&nbsp;<span class="string">'../servers/context7/index.js'</span>;<br>
+                    <span class="keyword">await</span> resolveLibraryId.<span
+                        class="function">call</span>({...});<br><br>
+
+                    <span class="comment">// Pattern 3: Direct file import</span><br>
+                    <span class="keyword">import</span> * <span class="keyword">as</span> tool <span
+                        class="keyword">from</span><br>
+                    &nbsp;&nbsp;<span class="string">'../servers/context7/resolve-library-id.js'</span>;<br>
+                    <span class="keyword">await</span> tool.<span class="function">call</span>({...});
+                </div>
+            </div>
+            <div class="column">
+                <h3 style="color: #c62828;">❌ Common Mistakes</h3>
+                <div class="code-block">
+                    <span class="comment">// Missing /index.js</span><br>
+                    <span class="keyword">import</span> { x } <span class="keyword">from</span> <span
+                        class="string">'../servers/context7'</span><br>
+                    <span style="color: #f44336;">// ❌ ESM requires explicit paths</span><br><br>
+
+                    <span class="comment">// Missing .js extension</span><br>
+                    <span class="keyword">import</span> { x } <span class="keyword">from</span> <span
+                        class="string">'../servers/ctx/index'</span><br>
+                    <span style="color: #f44336;">// ❌ Must include .js for ESM</span><br><br>
+
+                    <span class="comment">// Calling tool directly</span><br>
+                    <span class="keyword">await</span> resolveLibraryId({...})<br>
+                    <span style="color: #f44336;">// ❌ Must use .call() method</span><br><br>
+
+                    <span class="comment">// Non-existent export</span><br>
+                    <span class="keyword">import</span> { context7Tools } <span class="keyword">from</span> ...<br>
+                    <span style="color: #f44336;">// ❌ Use actual tool names</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="slide-footer">
+            <span>Code Executor MCP</span>
+            <span>Code runs from workspace/ directory</span>
+        </div>
+    </div>
+
+    <!-- Slide 13: Skills System -->
+    <div class="slide slide-content">
+        <h2>Skills System: Reusable Knowledge Packages</h2>
+
+        <p>Skills are folders containing documentation, scripts, and reference materials for specialized tasks:</p>
+
+        <div class="concept-grid">
+            <div class="concept-card">
+                <h4>📄 SKILL.md</h4>
+                <p>Main documentation with instructions, examples, and best practices for the skill</p>
+            </div>
+            <div class="concept-card">
+                <h4>📁 references/</h4>
+                <p>Additional reference materials like timezone lists, API docs, or config guides</p>
+            </div>
+            <div class="concept-card">
+                <h4>📜 scripts/</h4>
+                <p>Reusable TypeScript scripts executable with <code>run_script</code></p>
+            </div>
+        </div>
+
+        <h3 style="margin-top: 30px;">Included Skills</h3>
+        <div class="skills-grid">
+            <div class="skill-box">
+                <h4>context7-usage</h4>
+                <p>Tips and best practices for using Context7 MCP server to fetch library documentation efficiently</p>
+            </div>
+            <div class="skill-box">
+                <h4>mcp-tool-discovery</h4>
+                <p>Guide for discovering MCP tool parameters, debugging connections, and testing tool calls</p>
+            </div>
+            <div class="skill-box">
+                <h4>time-helper</h4>
+                <p>Time and timezone conversion capabilities with IANA timezone reference list</p>
+            </div>
+        </div>
+
+        <div class="slide-footer">
+            <span>Code Executor MCP</span>
+            <span>Skills enable agents to build expertise over time</span>
+        </div>
+    </div>
+
+    <!-- Slide 14: Project Structure -->
+    <div class="slide slide-content">
+        <h2>Project Structure</h2>
+
+        <div class="two-columns">
+            <div class="column">
+                <div class="code-block" style="font-size: 20px;">
+                    Code-Executor-MCP/<br>
+                    ├── src/<br>
+                    │ ├── server.ts&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment"># MCP server</span><br>
+                    │ ├── mcp.ts&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment"># MCP client</span><br>
+                    │ ├── config.ts&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment"># Config loader</span><br>
+                    │ ├── generate.ts&nbsp;&nbsp;<span class="comment"># Wrapper gen</span><br>
+                    │ ├── helpers.ts&nbsp;&nbsp;&nbsp;<span class="comment"># Utilities</span><br>
+                    │ └── run.ts&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment"># Script
+                        runner</span><br>
+                    ├── servers/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment"># Generated
+                        wrappers</span><br>
+                    ├── scripts/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment"># Reusable
+                        scripts</span><br>
+                    ├── skills/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment">#
+                        Knowledge packs</span><br>
+                    ├── workspace/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment"># Execution
+                        cwd</span><br>
+                    ├── mcps/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span
+                        class="comment"># Bundled MCPs</span><br>
+                    ├── mcp.json&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment"># Server
+                        config</span><br>
+                    └── skills.json&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment"># Skills config</span>
+                </div>
+            </div>
+            <div class="column">
+                <h3>Configuration Files</h3>
+                <div class="feature-box" style="margin-bottom: 18px;">
+                    <h3 style="font-size: 24px;">mcp.json</h3>
+                    <p style="font-size: 22px;">Define MCP servers with transport type, command, args, and environment
+                        variables.</p>
+                </div>
+                <div class="feature-box" style="margin-bottom: 18px;">
+                    <h3 style="font-size: 24px;">skills.json</h3>
+                    <p style="font-size: 22px;">Enable/disable skills and configure tags for organization and discovery.
+                    </p>
+                </div>
+                <div class="feature-box">
+                    <h3 style="font-size: 24px;">Environment Variables</h3>
+                    <p style="font-size: 22px;"><code>CODE_EXECUTOR_MCP_CONFIG</code> — Custom mcp.json<br>
+                        <code>CODE_EXECUTOR_SKILLS_CONFIG</code> — Custom skills.json<br>
+                        <code>CODE_EXECUTOR_SKIP_GET_STARTED</code> — Skip tutorial
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="slide-footer">
+            <span>Code Executor MCP</span>
+            <span>github.com/ramhaidar/Code-Executor-MCP</span>
+        </div>
+    </div>
+
+    <!-- Slide 15: Testing & Quality -->
+    <div class="slide slide-content">
+        <h2>Testing & Code Quality</h2>
+
+        <div class="stats-grid">
+            <div class="stat-box">
+                <span class="value">100%</span>
+                <span class="label">Test Coverage on Core Modules</span>
+            </div>
+            <div class="stat-box">
+                <span class="value">Vitest</span>
+                <span class="label">Modern Testing Framework</span>
+            </div>
+            <div class="stat-box">
+                <span class="value">3 Tiers</span>
+                <span class="label">Unit, Integration, E2E Tests</span>
+            </div>
+        </div>
+
+        <div class="two-columns" style="margin-top: 25px;">
+            <div class="column">
+                <h3>Test Structure</h3>
+                <div class="code-block" style="font-size: 20px;">
+                    tests/<br>
+                    ├──
+                    setup.ts&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span
+                        class="comment"># Global setup</span><br>
+                    ├── mocks/<br>
+                    │ ├── mcp-client.ts&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment"># Mock
+                        client</span><br>
+                    │ └── fixtures/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment">#
+                        Test data</span><br>
+                    ├──
+                    unit/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span
+                        class="comment"># Unit tests</span><br>
+                    │ ├── config.test.ts<br>
+                    │ ├── mcp.test.ts<br>
+                    │ ├── helpers.test.ts<br>
+                    │ └── ...<br>
+                    ├── integration/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span
+                        class="comment"># Integration</span><br>
+                    └──
+                    e2e/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span
+                        class="comment"># End-to-end</span>
+                </div>
+            </div>
+            <div class="column">
+                <h3>Test Commands</h3>
+                <div class="test-commands">
+                    <div class="test-cmd">
+                        <code>pnpm test</code><span>— Run all tests</span>
+                    </div>
+                    <div class="test-cmd">
+                        <code>pnpm test:watch</code><span>— Watch mode</span>
+                    </div>
+                    <div class="test-cmd">
+                        <code>pnpm test:coverage</code><span>— Coverage report</span>
+                    </div>
+                    <div class="test-cmd">
+                        <code>pnpm test:unit</code><span>— Unit tests only</span>
+                    </div>
+                    <div class="test-cmd">
+                        <code>pnpm test:integration</code><span>— Integration</span>
+                    </div>
+                    <div class="test-cmd">
+                        <code>pnpm test:e2e</code><span>— End-to-end</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="slide-footer">
+            <span>Code Executor MCP</span>
+            <span>github.com/ramhaidar/Code-Executor-MCP</span>
+        </div>
+    </div>
+
+    <!-- Slide 16: Inspiration & References -->
+    <div class="slide slide-content slide-inspiration">
+        <h2>Inspiration & Background</h2>
+
+        <div class="quote-box">
+            <p>"With code execution environments becoming more common for agents, a solution is to present MCP servers
+                as code APIs rather than direct tool calls. The agent can then write code to interact with MCP servers."
+            </p>
+        </div>
+
+        <p style="text-align: right; font-size: 22px; color: #666;">— Anthropic Engineering Blog, November 2025</p>
+
+        <div class="two-columns" style="margin-top: 30px;">
+            <div class="column">
+                <h3>Key Concepts from Anthropic</h3>
+                <ul>
+                    <li><strong>Progressive Disclosure:</strong> Present tools as filesystem, load on-demand</li>
+                    <li><strong>Context-Efficient Results:</strong> Filter/transform in code before model</li>
+                    <li><strong>Control Flow in Code:</strong> Loops, conditionals without agent overhead</li>
+                    <li><strong>State Persistence:</strong> Save results, build reusable skills</li>
+                </ul>
+            </div>
+            <div class="column">
+                <h3>References</h3>
+                <div class="ref-box">
+                    <p><strong>📖 Anthropic Blog:</strong><br>anthropic.com/engineering/code-execution-with-mcp</p>
+                </div>
+                <div class="ref-box">
+                    <p><strong>🔗 Model Context Protocol:</strong><br>modelcontextprotocol.io</p>
+                </div>
+                <div class="ref-box">
+                    <p><strong>☁️ Cloudflare Code Mode:</strong><br>blog.cloudflare.com/code-mode</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="slide-footer">
+            <span>Code Executor MCP</span>
+            <span>github.com/ramhaidar/Code-Executor-MCP</span>
+        </div>
+    </div>
+
+    <!-- Slide 17: Security Considerations -->
+    <div class="slide slide-content">
+        <h2>Security Considerations</h2>
+
+        <p>Important security notes when deploying Code Executor MCP:</p>
+
+        <div class="concept-grid">
+            <div class="concept-card" style="border-left-color: #f44336;">
+                <h4>⚠️ Unsandboxed Execution</h4>
+                <p>The <code>execute_code</code> tool runs arbitrary TypeScript without sandboxing. Only use in trusted
+                    environments.</p>
+            </div>
+            <div class="concept-card" style="border-left-color: #ff9800;">
+                <h4>🔐 Credential Exposure</h4>
+                <p>Server configs in <code>mcp.json</code> may contain sensitive credentials. Protect with appropriate
+                    permissions.</p>
+            </div>
+            <div class="concept-card" style="border-left-color: #2196f3;">
+                <h4>📁 Workspace Isolation</h4>
+                <p>Executed code operates from <code>workspace/</code>. File operations are relative. Don't store
+                    sensitive data there.</p>
+            </div>
+        </div>
+
+        <div class="feature-box" style="margin-top: 35px; border-left-color: #4caf50;">
+            <h3 style="color: #2e7d32;">Privacy Benefits</h3>
+            <p>When agents use code execution, intermediate results stay in the execution environment by default. Data
+                you don't log never enters the model's context — enabling privacy-preserving workflows where sensitive
+                information flows between tools without model exposure.</p>
+        </div>
+
+        <div class="slide-footer">
+            <span>Code Executor MCP</span>
+            <span>Consider security implications before deployment</span>
+        </div>
+    </div>
+
+    <!-- Slide 18: Get Started -->
+    <div class="slide slide-cta">
+        <h2>Get Started Today</h2>
+
+        <div class="install-steps">
+            <code>git clone https://github.com/ramhaidar/Code-Executor-MCP.git</code>
+            <code>cd Code-Executor-MCP && pnpm install</code>
+            <code>pnpm run gen    # Generate wrapper files</code>
+            <code>pnpm run dev    # Start development server</code>
+        </div>
+
+        <div class="cta-links">
+            <p>🔗 Repository: <strong>github.com/ramhaidar/Code-Executor-MCP</strong></p>
+            <p>📖 Inspiration: <strong>anthropic.com/engineering/code-execution-with-mcp</strong></p>
+            <p>📜 License: <strong>GPL-3.0</strong></p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
