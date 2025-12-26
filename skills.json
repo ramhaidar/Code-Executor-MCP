@@ -1,0 +1,32 @@
+{
+    "skills": {
+        "time-helper": {
+            "enabled": true,
+            "path": "./skills/time-helper",
+            "tags": [
+                "time",
+                "timezone",
+                "conversion"
+            ]
+        },
+        "mcp-tool-discovery": {
+            "enabled": true,
+            "path": "./skills/mcp-tool-discovery",
+            "tags": [
+                "mcp",
+                "tools",
+                "discovery",
+                "debugging"
+            ]
+        },
+        "context7-usage": {
+            "enabled": true,
+            "path": "./skills/context7-usage",
+            "tags": [
+                "documentation",
+                "context7",
+                "mcp"
+            ]
+        }
+    }
+}
