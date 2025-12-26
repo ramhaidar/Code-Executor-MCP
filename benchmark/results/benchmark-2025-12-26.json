@@ -1,0 +1,85 @@
+{
+  "timestamp": "2025-12-26T00:12:07.108Z",
+  "results": [
+    {
+      "scenario": "Simple Tool Call",
+      "directApproach": {
+        "toolDefinitionTokens": 1079,
+        "intermediateResultTokens": 102,
+        "codeTokens": 0,
+        "totalTokens": 1181
+      },
+      "codeExecutionApproach": {
+        "toolDefinitionTokens": 34,
+        "intermediateResultTokens": 2,
+        "codeTokens": 40,
+        "totalTokens": 76
+      },
+      "savings": {
+        "tokens": 1105,
+        "percentage": 93.56477561388654
+      },
+      "timestamp": "2025-12-26T00:12:05.720Z"
+    },
+    {
+      "scenario": "Multi-Tool Workflow",
+      "directApproach": {
+        "toolDefinitionTokens": 1079,
+        "intermediateResultTokens": 10684,
+        "codeTokens": 0,
+        "totalTokens": 11763
+      },
+      "codeExecutionApproach": {
+        "toolDefinitionTokens": 89,
+        "intermediateResultTokens": 5,
+        "codeTokens": 104,
+        "totalTokens": 198
+      },
+      "savings": {
+        "tokens": 11565,
+        "percentage": 98.31675592960978
+      },
+      "timestamp": "2025-12-26T00:12:05.764Z"
+    },
+    {
+      "scenario": "Data Filtering",
+      "directApproach": {
+        "toolDefinitionTokens": 1079,
+        "intermediateResultTokens": 696208,
+        "codeTokens": 0,
+        "totalTokens": 697287
+      },
+      "codeExecutionApproach": {
+        "toolDefinitionTokens": 49,
+        "intermediateResultTokens": 503,
+        "codeTokens": 98,
+        "totalTokens": 650
+      },
+      "savings": {
+        "tokens": 696637,
+        "percentage": 99.90678156913869
+      },
+      "timestamp": "2025-12-26T00:12:06.990Z"
+    },
+    {
+      "scenario": "Loop Operations",
+      "directApproach": {
+        "toolDefinitionTokens": 1079,
+        "intermediateResultTokens": 14891,
+        "codeTokens": 0,
+        "totalTokens": 15970
+      },
+      "codeExecutionApproach": {
+        "toolDefinitionTokens": 56,
+        "intermediateResultTokens": 7,
+        "codeTokens": 163,
+        "totalTokens": 226
+      },
+      "savings": {
+        "tokens": 15744,
+        "percentage": 98.58484658735128
+      },
+      "timestamp": "2025-12-26T00:12:07.020Z"
+    }
+  ]
+}
