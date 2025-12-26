@@ -1,0 +1,23 @@
+{
+  "skills": {
+    "test-skill": {
+      "enabled": true,
+      "path": "./skills/test-skill",
+      "tags": ["test", "example"]
+    },
+    "disabled-skill": {
+      "enabled": false,
+      "path": "./skills/disabled-skill",
+      "tags": ["disabled"]
+    },
+    "custom-path-skill": {
+      "enabled": true,
+      "path": "/custom/path/to/skill",
+      "tags": ["custom"]
+    },
+    "default-path-skill": {
+      "enabled": true,
+      "tags": ["default"]
+    }
+  }
+}

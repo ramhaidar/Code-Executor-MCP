@@ -1,0 +1,30 @@
+{
+  "servers": {
+    "test-server": {
+      "enabled": true,
+      "description": "Test server for unit tests",
+      "transport": "stdio",
+      "command": "node",
+      "args": ["test-server.js"],
+      "timeout": 5000,
+      "retries": 1
+    },
+    "disabled-server": {
+      "enabled": false,
+      "description": "Disabled server for testing",
+      "transport": "stdio",
+      "command": "node",
+      "args": ["disabled-server.js"]
+    },
+    "slow-server": {
+      "enabled": true,
+      "description": "Server with custom timeout settings",
+      "transport": "stdio",
+      "command": "node",
+      "args": ["slow-server.js"],
+      "timeout": 60000,
+      "retries": 5,
+      "retryDelay": 2000
+    }
+  }
+}
