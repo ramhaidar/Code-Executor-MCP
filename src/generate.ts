@@ -592,11 +592,13 @@ ${kebabAliasExports.join("\n")}
  */
 function generateRootIndex(serverNames: string[]): string {
   const exports: string[] = [];
-  const serverList = serverNames.map(s => `*   - ${s}`).join("\n");
+  const serverList = serverNames.map(s => ` *   - ${s}`).join("\n");
   const exampleServer = serverNames.length > 0 ? serverNames[0] : "serverName";
 
   for (const serverName of serverNames) {
-    exports.push(`export * as ${serverName} from "./${serverName}/index.js";`);
+    // Quote server names with hyphens to make them valid identifiers
+    const exportName = isValidIdentifier(serverName) ? serverName : `"${serverName}"`;
+    exports.push(`export * as ${exportName} from "./${serverName}/index.js";`);
   }
 
   return `/**
@@ -631,7 +633,9 @@ function generateRootIndexDeclaration(serverNames: string[]): string {
   const serverList = serverNames.map(s => `*   - ${s}`).join("\n");
 
   for (const serverName of serverNames) {
-    exports.push(`export * as ${serverName} from "./${serverName}/index.js";`);
+    // Quote server names with hyphens to make them valid identifiers
+    const exportName = isValidIdentifier(serverName) ? serverName : `"${serverName}"`;
+    exports.push(`export * as ${exportName} from "./${serverName}/index.js";`);
   }
 
   return `/**
