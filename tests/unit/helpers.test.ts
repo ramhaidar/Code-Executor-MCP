@@ -11,6 +11,7 @@ import {
   hoistImports,
   isValidIdentifier,
   toCallFunctionName,
+  formatErrorForJson,
 } from '../../src/helpers.js';
 
 describe('helpers.ts', () => {
@@ -543,6 +544,73 @@ const x = 1;`;
       // Should be treated as import (ends with semicolon)
       expect(result.imports).toContain('import type;');
       expect(result.body).toContain('const x = 1');
+    });
+  });
+
+  describe('formatErrorForJson', () => {
+    it('should format Error instances with name, message, and stack', () => {
+      const error = new Error('Test error message');
+      error.name = 'TestError';
+      
+      const result = formatErrorForJson(error);
+      const parsed = JSON.parse(result);
+      
+      expect(parsed.name).toBe('TestError');
+      expect(parsed.message).toBe('Test error message');
+      expect(parsed.stack).toBeDefined();
+    });
+
+    it('should format plain Error with default name', () => {
+      const error = new Error('Simple error');
+      
+      const result = formatErrorForJson(error);
+      const parsed = JSON.parse(result);
+      
+      expect(parsed.name).toBe('Error');
+      expect(parsed.message).toBe('Simple error');
+    });
+
+    it('should format string values as JSON strings', () => {
+      const result = formatErrorForJson('string error');
+      
+      expect(result).toBe('"string error"');
+    });
+
+    it('should format numbers as JSON strings', () => {
+      const result = formatErrorForJson(42);
+      
+      expect(result).toBe('"42"');
+    });
+
+    it('should format null as JSON string', () => {
+      const result = formatErrorForJson(null);
+      
+      expect(result).toBe('"null"');
+    });
+
+    it('should format undefined as JSON string', () => {
+      const result = formatErrorForJson(undefined);
+      
+      expect(result).toBe('"undefined"');
+    });
+
+    it('should format objects as JSON strings', () => {
+      const obj = { foo: 'bar' };
+      const result = formatErrorForJson(obj);
+      
+      expect(result).toBe('"[object Object]"');
+    });
+
+    it('should format arrays as JSON strings', () => {
+      const arr = [1, 2, 3];
+      const result = formatErrorForJson(arr);
+      
+      expect(result).toBe('"1,2,3"');
+    });
+
+    it('should format boolean values as JSON strings', () => {
+      expect(formatErrorForJson(true)).toBe('"true"');
+      expect(formatErrorForJson(false)).toBe('"false"');
     });
   });
 });
