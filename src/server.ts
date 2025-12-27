@@ -7,7 +7,9 @@ import { readdir, readFile, writeFile, mkdir, access, unlink } from "node:fs/pro
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { loadSkillsConfig, loadConfig, isSkillEnabled, isServerEnabled, resolveSkillPath, initConfigPaths, getConfigPath, getSkillsConfigPath, shouldSkipGetStarted, type SkillsConfig } from "./config.js";
-import { checkServerHealth, testServerConnection, listConfiguredServers, getServerStderr } from "./mcp.js";
+import { checkServerHealth, testServerConnection, listConfiguredServers, getServerStderr, getConnectionStatus } from "./mcp.js";
+import { addExecutionRecord, getExecutionHistory, getExecutionById, getHistoryCount, getMaxHistorySize } from "./history.js";
+import { formatErrorForJson } from "./helpers.js";
 
 // Initialize config paths from CLI arguments (before any other operations)
 initConfigPaths(process.argv.slice(2));
@@ -916,8 +918,16 @@ server.tool(
       .boolean()
       .optional()
       .describe("Enable verbose debug logging for MCP connections and tool calls (default: false). Use this to diagnose hanging executions."),
+    maxResponseLength: z
+      .number()
+      .optional()
+      .describe("Maximum length of stdout to return (characters). Default: unlimited. Use this to prevent large responses from consuming too many tokens."),
+    truncateResponse: z
+      .boolean()
+      .optional()
+      .describe("If true, truncate long responses instead of just adding a warning. Default: false"),
   },
-  async ({ code, timeout, autoExit = true, validate = true, debug = false }) => {
+  async ({ code, timeout, autoExit = true, validate = true, debug = false, maxResponseLength, truncateResponse = false }) => {
     // BLOCK execution if get_started hasn't been called yet
     if (!hasCalledGetStarted) {
       return {
@@ -946,6 +956,11 @@ Then come back to execute_code.`,
     if (validate) {
       const validationResult = await validateTypeScript(code);
       if (!validationResult.valid) {
+        // Process errors with line mapping and hints
+        let processedErrors = validationResult.errors || "Unknown validation error";
+        processedErrors = mapValidationErrors(processedErrors, `_validate_`);
+        processedErrors = addValidationHints(processedErrors);
+        
         return {
           content: [
             {
@@ -953,7 +968,7 @@ Then come back to execute_code.`,
               text: JSON.stringify({
                 exitCode: 1,
                 stdout: "",
-                stderr: `TypeScript validation failed:\n${validationResult.errors}\n\nFix the syntax errors above before executing the code.`,
+                stderr: `TypeScript validation failed:\n${processedErrors}\n\nFix the syntax errors above before executing the code.`,
                 validationFailed: true,
               }, null, 2),
             },
@@ -1022,7 +1037,7 @@ Then come back to execute_code.`,
 
     const result = await executeCodeWithEnv(finalCode, effectiveTimeout, env);
 
-    // Add helpful hint on common import errors
+    // Add helpful hint on common import errors (using JSON-safe formatting)
     let hint = "";
     if (result.exitCode !== 0) {
       const stderr = result.stderr.toLowerCase();
@@ -1033,17 +1048,57 @@ Then come back to execute_code.`,
         combined.includes("err_module_not_found") ||
         combined.includes("is not exported") ||
         combined.includes("does not provide an export")) {
-        hint = "\n\n💡 TIP: Import error detected. Common causes:\n" +
-          "  • Missing '/index.js' - use: import * as x from '../servers/SERVER/index.js'\n" +
-          "  • Missing '.js' extension - ESM requires explicit .js\n" +
-          "  • Wrong export name - use list_server_tools to see available exports\n" +
-          "  • 📖 Call 'get_started' tool for a complete tutorial on correct patterns";
+        hint = JSON.stringify({
+          tip: "Import error detected",
+          causes: [
+            "Missing '/index.js' - use: import * as x from '../servers/SERVER/index.js'",
+            "Missing '.js' extension - ESM requires explicit .js",
+            "Wrong export name - use list_server_tools to see available exports",
+            "Call 'get_started' tool for a complete tutorial on correct patterns"
+          ]
+        });
       } else if (combined.includes("is not a function") ||
         combined.includes("call is not a function")) {
-        hint = "\n\n💡 TIP: Function call error. Remember:\n" +
-          "  • Tools are objects, not functions - use: await tool.call({ args })\n" +
-          "  • NOT: await tool({ args })\n" +
-          "  • 📖 Call 'get_started' tool for correct usage patterns";
+        hint = JSON.stringify({
+          tip: "Function call error",
+          causes: [
+            "Tools are objects, not functions - use: await tool.call({ args })",
+            "NOT: await tool({ args })",
+            "Call 'get_started' tool for correct usage patterns"
+          ]
+        });
+      }
+    }
+
+    // Handle response truncation
+    let stdout = result.stdout;
+    let truncationNotice = "";
+    if (maxResponseLength && stdout.length > maxResponseLength) {
+      if (truncateResponse) {
+        const originalLength = stdout.length;
+        stdout = stdout.substring(0, maxResponseLength);
+        truncationNotice = `\n\n... [TRUNCATED: ${originalLength - maxResponseLength} more characters. Original length: ${originalLength}]`;
+      } else {
+        truncationNotice = `\n\n⚠️ Response is ${stdout.length} characters. ` +
+          `Consider using maxResponseLength parameter to truncate, or set truncateResponse: true.`;
+      }
+    }
+
+    // Save execution record to history
+    const executionRecord = addExecutionRecord(
+      code,
+      result,
+      { validated: validate, debug, timeout: effectiveTimeout }
+    );
+
+    // Parse hint back to object if it exists, for proper JSON nesting
+    let parsedHint: object | undefined;
+    if (hint) {
+      try {
+        parsedHint = JSON.parse(hint);
+      } catch {
+        // If parsing fails, include as string
+        parsedHint = undefined;
       }
     }
 
@@ -1054,8 +1109,14 @@ Then come back to execute_code.`,
           text: JSON.stringify(
             {
               exitCode: result.exitCode,
-              stdout: result.stdout,
-              stderr: result.stderr + hint,
+              stdout: stdout + truncationNotice,
+              stderr: result.stderr,
+              executionId: executionRecord.id,
+              ...(parsedHint ? { hint: parsedHint } : {}),
+              ...(maxResponseLength && stdout.length > maxResponseLength ? {
+                originalLength: result.stdout.length,
+                truncated: truncateResponse
+              } : {}),
             },
             null,
             2
@@ -1141,7 +1202,7 @@ server.tool(
 // =============================================================================
 server.tool(
   "list_available_servers",
-  "List MCP servers that are enabled and have wrappers generated. Quick way to see what's ready to use.",
+  "List MCP servers that are enabled and have wrappers generated. Quick way to see what's ready to use. Also shows connection pooling status.",
   {},
   async () => {
     const blocked = requireGetStarted();
@@ -1154,6 +1215,9 @@ server.tool(
         wrapperDir: string;
         tools: string[];
         status: "ready" | "no-wrapper" | "disabled";
+        connected?: boolean;
+        lastConnected?: string;
+        connectionTimeMs?: number;
       }> = [];
 
       for (const [serverName, serverConfig] of Object.entries(config.servers)) {
@@ -1162,12 +1226,18 @@ server.tool(
         const hasWrapper = await pathExists(wrapperPath);
         const isEnabled = isServerEnabled(serverConfig);
 
+        // Get connection status for all servers
+        const connectionStatus = getConnectionStatus(serverName);
+
         if (!isEnabled) {
           available.push({
             name: serverName,
             wrapperDir,
             tools: [],
             status: "disabled",
+            connected: connectionStatus.connected,
+            lastConnected: connectionStatus.lastConnected?.toISOString(),
+            connectionTimeMs: connectionStatus.connectionTimeMs,
           });
           continue;
         }
@@ -1178,6 +1248,9 @@ server.tool(
             wrapperDir,
             tools: [],
             status: "no-wrapper",
+            connected: connectionStatus.connected,
+            lastConnected: connectionStatus.lastConnected?.toISOString(),
+            connectionTimeMs: connectionStatus.connectionTimeMs,
           });
           continue;
         }
@@ -1193,6 +1266,9 @@ server.tool(
           wrapperDir,
           tools,
           status: "ready",
+          connected: connectionStatus.connected,
+          lastConnected: connectionStatus.lastConnected?.toISOString(),
+          connectionTimeMs: connectionStatus.connectionTimeMs,
         });
       }
 
@@ -1203,6 +1279,9 @@ server.tool(
       const orphaned = serverDirs
         .filter(d => d.isDirectory() && !configuredWrappers.has(d.name))
         .map(d => d.name);
+
+      // Count connected servers
+      const connectedCount = available.filter(s => s.connected).length;
 
       return {
         content: [
@@ -1216,10 +1295,13 @@ server.tool(
                 disabled: available.filter(s => s.status === "disabled").length,
                 noWrapper: available.filter(s => s.status === "no-wrapper").length,
                 orphaned: orphaned.length,
+                connected: connectedCount,
               },
               hint: orphaned.length > 0
                 ? "Orphaned wrappers exist without server config. Add them to mcp.json or delete the directories."
-                : undefined,
+                : connectedCount > 0
+                  ? `${connectedCount} server(s) have active connections (connection pooling).`
+                  : undefined,
             }, null, 2) + getStartedReminder(),
           },
         ],
@@ -2109,6 +2191,85 @@ server.tool(
 );
 
 // =============================================================================
+// ERROR HINTS for common TypeScript validation errors
+// =============================================================================
+const ERROR_HINTS: Array<{
+  pattern: RegExp;
+  suggestion: string;
+}> = [
+  {
+    pattern: /TS1002.*Unterminated string literal/i,
+    suggestion: "💡 Check quote matching - you may have mismatched ' or \" characters"
+  },
+  {
+    pattern: /Cannot find module '\.\.\/servers\/([^']+)'/i,
+    suggestion: "💡 Import path error. Use: import * as tool from '../servers/{name}/index.js'"
+  },
+  {
+    pattern: /is not exported from/i,
+    suggestion: "💡 Wrong export name. Use list_server_tools to see correct export names"
+  },
+  {
+    pattern: /TS2304.*Cannot find name/i,
+    suggestion: "💡 Undefined variable. Check for typos or missing imports"
+  },
+  {
+    pattern: /TS1005.*expected/i,
+    suggestion: "💡 Syntax error - check for missing brackets, parentheses, or semicolons"
+  },
+  {
+    pattern: /TS1003.*Identifier expected/i,
+    suggestion: "💡 Expected an identifier (variable/function name). Check for reserved keywords or syntax issues"
+  },
+  {
+    pattern: /TS2339.*does not exist on type/i,
+    suggestion: "💡 Property doesn't exist. Check spelling or use type assertion if needed"
+  },
+  {
+    pattern: /TS2345.*Argument of type.*is not assignable/i,
+    suggestion: "💡 Type mismatch. Check the expected parameter types"
+  },
+  {
+    pattern: /TS1128.*Declaration or statement expected/i,
+    suggestion: "💡 Unexpected syntax. Check for extra/missing braces or statements outside functions"
+  },
+  {
+    pattern: /TS2307.*Cannot find module/i,
+    suggestion: "💡 Module not found. Ensure correct path and .js extension for ESM imports"
+  }
+];
+
+/**
+ * Add helpful hints to validation errors based on error patterns
+ */
+function addValidationHints(errors: string): string {
+  let hints = "";
+  for (const { pattern, suggestion } of ERROR_HINTS) {
+    if (pattern.test(errors)) {
+      hints += `\n${suggestion}`;
+    }
+  }
+  return errors + (hints ? `\n\n--- Suggestions ---${hints}` : "");
+}
+
+/**
+ * Map validation errors to replace temp file paths with user-friendly line references
+ */
+function mapValidationErrors(errors: string, tempFileName: string): string {
+  // Extract just the filename from the path for matching
+  const filenameOnly = tempFileName.replace(/\\/g, '/').split('/').pop() || tempFileName;
+  
+  // Pattern: workspace/_validate_XXXXX.ts(LINE,COL): error TSXXXX: message
+  // Or: full/path/to/_validate_XXXXX.ts(LINE,COL): error TSXXXX: message
+  const regex = new RegExp(
+    `[^\\s(]*${filenameOnly.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\((\\d+),(\\d+)\\)`,
+    'g'
+  );
+  
+  return errors.replace(regex, 'Line $1, Column $2 in your code');
+}
+
+// =============================================================================
 // TOOL: validate_code
 // =============================================================================
 server.tool(
@@ -2123,6 +2284,15 @@ server.tool(
 
     try {
       const result = await validateTypeScript(code);
+      
+      // Process errors if validation failed
+      let processedErrors = result.errors;
+      if (!result.valid && processedErrors) {
+        // Map temp file paths to user-friendly line references
+        processedErrors = mapValidationErrors(processedErrors, `_validate_`);
+        // Add helpful hints based on error patterns
+        processedErrors = addValidationHints(processedErrors);
+      }
 
       return {
         content: [
@@ -2130,7 +2300,7 @@ server.tool(
             type: "text",
             text: JSON.stringify({
               valid: result.valid,
-              errors: result.errors,
+              errors: processedErrors,
               hint: result.valid
                 ? "Code syntax is valid. You can proceed with execute_code."
                 : "Fix the errors above before executing the code.",
@@ -2150,6 +2320,624 @@ server.tool(
         isError: true,
       };
     }
+  }
+);
+
+// =============================================================================
+// CODE TEMPLATES for common patterns
+// =============================================================================
+const CODE_TEMPLATES: Record<string, { description: string; code: string }> = {
+  "single-tool-call": {
+    description: "Call a single MCP tool and log the result",
+    code: `// Single Tool Call Template
+// Replace {SERVER} with your server name (e.g., 'context7')
+// Replace {TOOL} with your tool name (e.g., 'resolve-library-id')
+import * as tool from '../servers/{SERVER}/{TOOL}.js';
+
+const result = await tool.call({
+  // Add your parameters here
+  // param1: "value1",
+  // param2: "value2",
+});
+
+console.log("Result:", JSON.stringify(result, null, 2));
+`
+  },
+  "multi-tool-workflow": {
+    description: "Chain multiple tool calls together, using results from one in the next",
+    code: `// Multi-Tool Workflow Template
+// Replace {SERVER} with your server name
+import { tool1, tool2 } from '../servers/{SERVER}/index.js';
+
+// Step 1: First operation
+const step1Result = await tool1({
+  param1: "value"
+});
+console.log("Step 1 result:", JSON.stringify(step1Result, null, 2));
+
+// Step 2: Use result from step 1
+// Extract what you need from step1Result
+const extractedValue = step1Result.content?.[0]?.text || "";
+
+const step2Result = await tool2({
+  param: extractedValue
+});
+console.log("Step 2 result:", JSON.stringify(step2Result, null, 2));
+
+// Final output
+console.log("Workflow complete!");
+`
+  },
+  "error-handling": {
+    description: "Robust error handling for MCP tool calls",
+    code: `// Error Handling Template
+import * as tool from '../servers/{SERVER}/{TOOL}.js';
+
+try {
+  const result = await tool.call({
+    // Add your parameters here
+  });
+  
+  // Check if the result indicates an error
+  if (result.isError) {
+    console.error("Tool returned error:", result.content?.[0]?.text);
+    process.exit(1);
+  }
+  
+  console.log("Success:", JSON.stringify(result, null, 2));
+} catch (error) {
+  // Handle connection or execution errors
+  console.error("Execution failed:", error instanceof Error ? error.message : String(error));
+  process.exit(1);
+}
+`
+  },
+  "file-io": {
+    description: "Read and write files in the workspace",
+    code: `// File I/O Template
+import { readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
+// Files are relative to workspace/ directory when using relative paths
+// Or use absolute paths for other locations
+
+// Read a file
+const inputPath = './input.json';  // workspace/input.json
+const content = await readFile(inputPath, 'utf-8');
+console.log("Read file:", content);
+
+// Process the data
+const data = JSON.parse(content);
+const processed = { ...data, timestamp: new Date().toISOString() };
+
+// Write output
+const outputPath = './output.json';  // workspace/output.json
+await writeFile(outputPath, JSON.stringify(processed, null, 2));
+console.log("Wrote output to:", outputPath);
+`
+  },
+  "parallel-calls": {
+    description: "Execute multiple tool calls in parallel for better performance",
+    code: `// Parallel Calls Template
+import { tool1, tool2, tool3 } from '../servers/{SERVER}/index.js';
+
+// Execute multiple independent calls in parallel
+const [result1, result2, result3] = await Promise.all([
+  tool1({ param: "value1" }),
+  tool2({ param: "value2" }),
+  tool3({ param: "value3" }),
+]);
+
+console.log("Result 1:", JSON.stringify(result1, null, 2));
+console.log("Result 2:", JSON.stringify(result2, null, 2));
+console.log("Result 3:", JSON.stringify(result3, null, 2));
+
+// Or use Promise.allSettled for graceful handling of partial failures
+const results = await Promise.allSettled([
+  tool1({ param: "value1" }),
+  tool2({ param: "value2" }),
+]);
+
+for (const [index, result] of results.entries()) {
+  if (result.status === 'fulfilled') {
+    console.log(\`Call \${index + 1} succeeded:\`, result.value);
+  } else {
+    console.error(\`Call \${index + 1} failed:\`, result.reason);
+  }
+}
+`
+  }
+};
+
+// =============================================================================
+// TOOL: get_template
+// =============================================================================
+server.tool(
+  "get_template",
+  "Get pre-built code templates for common patterns. Use these as starting points for your code.",
+  {
+    pattern: z.enum([
+      "single-tool-call",
+      "multi-tool-workflow",
+      "error-handling",
+      "file-io",
+      "parallel-calls"
+    ]).describe("Template pattern to retrieve"),
+    server: z.string().optional().describe("Server name to use in template placeholders (optional)"),
+    tool: z.string().optional().describe("Tool name to use in template placeholders (optional)"),
+  },
+  async ({ pattern, server: serverName, tool: toolName }) => {
+    const blocked = requireGetStarted();
+    if (blocked) return blocked;
+
+    const template = CODE_TEMPLATES[pattern];
+    if (!template) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Template not found: ${pattern}. Available patterns: ${Object.keys(CODE_TEMPLATES).join(", ")}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+
+    // Replace placeholders if server/tool names provided
+    let code = template.code;
+    if (serverName) {
+      code = code.replace(/\{SERVER\}/g, serverName);
+    }
+    if (toolName) {
+      code = code.replace(/\{TOOL\}/g, toolName);
+    }
+
+    // Build output with template info
+    let output = `## ${pattern}\n`;
+    output += `**Description:** ${template.description}\n\n`;
+    output += `### Code Template\n\`\`\`typescript\n${code}\n\`\`\`\n\n`;
+    
+    // Add usage hints
+    output += `### Usage\n`;
+    if (!serverName || !toolName) {
+      output += `Replace placeholders:\n`;
+      if (!serverName) output += `  • \`{SERVER}\` → your server name (use list_available_servers)\n`;
+      if (!toolName) output += `  • \`{TOOL}\` → your tool name (use list_server_tools)\n`;
+    } else {
+      output += `Template is ready to use with server '${serverName}'`;
+      if (toolName) output += ` and tool '${toolName}'`;
+      output += `.\n`;
+    }
+    
+    output += `\n### Available Templates\n`;
+    for (const [name, tmpl] of Object.entries(CODE_TEMPLATES)) {
+      const marker = name === pattern ? "→ " : "  ";
+      output += `${marker}• ${name}: ${tmpl.description}\n`;
+    }
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: output,
+        },
+      ],
+    };
+  }
+);
+
+// =============================================================================
+// TOOL: get_import
+// =============================================================================
+
+/**
+ * Get tool exports from a server's index.ts file
+ */
+async function getToolExports(serverDir: string): Promise<string[]> {
+  const indexPath = join(serverDir, "index.ts");
+  if (!(await pathExists(indexPath))) {
+    return [];
+  }
+  
+  try {
+    const content = await readFile(indexPath, "utf-8");
+    // Match export { name1, name2 } from pattern
+    const exportMatch = content.match(/export\s*{\s*([^}]+)\s*}\s*from/);
+    if (exportMatch) {
+      return exportMatch[1]
+        .split(",")
+        .map(name => name.trim())
+        .filter(name => name.length > 0);
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+server.tool(
+  "get_import",
+  "Generate correct import statement for a server tool. Helps avoid import path errors.",
+  {
+    server: z.string().describe("Server name"),
+    tool: z.string().optional().describe("Tool name (optional, for single import)"),
+    style: z.enum(["namespace", "named", "direct"]).optional()
+      .describe("Import style: namespace (import * as), named ({ tool }), or direct (single file). Default: namespace"),
+  },
+  async ({ server: serverName, tool: toolName, style = "namespace" }) => {
+    const blocked = requireGetStarted();
+    if (blocked) return blocked;
+
+    const serverDir = join(SERVERS_DIR, serverName);
+    if (!(await pathExists(serverDir))) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Server not found: ${serverName}\n\nUse list_available_servers to see available servers.`,
+          },
+        ],
+        isError: true,
+      };
+    }
+
+    let importStatement: string;
+    let usageExample: string;
+    
+    if (style === "namespace") {
+      const safeName = serverName.replace(/[^a-zA-Z0-9_]/g, '_');
+      importStatement = `import * as ${safeName} from '../servers/${serverName}/index.js';`;
+      usageExample = `const result = await ${safeName}.toolName({ param: "value" });`;
+    } else if (style === "named") {
+      // Read index.ts to get export names
+      const exports = await getToolExports(serverDir);
+      if (exports.length === 0) {
+        importStatement = `// No named exports found - use namespace import instead\nimport * as ${serverName.replace(/[^a-zA-Z0-9_]/g, '_')} from '../servers/${serverName}/index.js';`;
+        usageExample = `const result = await ${serverName.replace(/[^a-zA-Z0-9_]/g, '_')}.toolName({ param: "value" });`;
+      } else {
+        importStatement = `import { ${exports.join(', ')} } from '../servers/${serverName}/index.js';`;
+        usageExample = `const result = await ${exports[0]}({ param: "value" });`;
+      }
+    } else if (style === "direct") {
+      if (!toolName) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Tool name required for direct import style.\n\nUsage: get_import({ server: "${serverName}", tool: "tool-name", style: "direct" })`,
+            },
+          ],
+          isError: true,
+        };
+      }
+      const safeName = toCamelCase(toolName);
+      importStatement = `import * as ${safeName} from '../servers/${serverName}/${toolName}.js';`;
+      usageExample = `const result = await ${safeName}.call({ param: "value" });`;
+    } else {
+      importStatement = `import * as ${serverName.replace(/[^a-zA-Z0-9_]/g, '_')} from '../servers/${serverName}/index.js';`;
+      usageExample = `const result = await ${serverName.replace(/[^a-zA-Z0-9_]/g, '_')}.toolName({ param: "value" });`;
+    }
+
+    let output = `## Import Statement\n\n\`\`\`typescript\n${importStatement}\n\`\`\`\n\n`;
+    output += `## Usage Example\n\n\`\`\`typescript\n${usageExample}\n\`\`\`\n\n`;
+    output += `## Import Styles\n\n`;
+    output += `| Style | Description |\n`;
+    output += `|-------|-------------|\n`;
+    output += `| namespace | Import all tools under one name: \`import * as server from '...'\` |\n`;
+    output += `| named | Import specific tools: \`import { tool1, tool2 } from '...'\` |\n`;
+    output += `| direct | Import single tool file: \`import * as tool from '.../tool.js'\` |\n`;
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: output,
+        },
+      ],
+    };
+  }
+);
+
+// =============================================================================
+// TOOL: list_history
+// =============================================================================
+server.tool(
+  "list_history",
+  "List recent code executions with preview. Useful for reviewing past executions and finding IDs for replay.",
+  {},
+  async () => {
+    const blocked = requireGetStarted();
+    if (blocked) return blocked;
+
+    const history = getExecutionHistory();
+    const count = getHistoryCount();
+    const maxSize = getMaxHistorySize();
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            executions: history,
+            count,
+            maxSize,
+            hint: count > 0
+              ? "Use replay_code with an execution ID to re-run a previous execution."
+              : "No executions in history yet. Run some code with execute_code first.",
+          }, null, 2),
+        },
+      ],
+    };
+  }
+);
+
+// =============================================================================
+// TOOL: replay_code
+// =============================================================================
+server.tool(
+  "replay_code",
+  "Re-run a previous execution by ID. Get IDs from list_history.",
+  {
+    id: z.string().describe("Execution ID from history (e.g., 'exec_abc123_0001')"),
+    timeout: z.number().optional().describe("Override timeout in milliseconds (optional)"),
+    debug: z.boolean().optional().describe("Override debug setting (optional)"),
+  },
+  async ({ id, timeout: overrideTimeout, debug: overrideDebug }) => {
+    const blocked = requireGetStarted();
+    if (blocked) return blocked;
+
+    const record = getExecutionById(id);
+    if (!record) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              error: `Execution not found: ${id}`,
+              hint: "Use list_history to see available execution IDs.",
+            }, null, 2),
+          },
+        ],
+        isError: true,
+      };
+    }
+
+    // Use original settings unless overridden
+    const effectiveTimeout = overrideTimeout ?? record.timeout;
+    const effectiveDebug = overrideDebug ?? record.debug;
+
+    // Re-hoist imports from the original code
+    const { imports, body } = hoistImports(record.code);
+
+    let finalCode: string;
+    // Always use autoExit for replays (consistent with original behavior)
+    const wrappedBody = [
+      "import { disconnectAll as __ce_disconnectAll } from \"../src/mcp.js\";",
+      "",
+      "let __ce_cleaned = false;",
+      "const __ce_cleanup = async () => {",
+      "  if (__ce_cleaned) return;",
+      "  __ce_cleaned = true;",
+      "  try {",
+      "    await __ce_disconnectAll();",
+      "  } catch (err) {",
+      "    console.error(\"[code-executor] Cleanup error:\", err);",
+      "  }",
+      "};",
+      "",
+      "const __ce_exit = async (code?: number) => {",
+      "  await __ce_cleanup();",
+      "  const exitCode = code ?? (process.exitCode ?? 0);",
+      "  process.exit(exitCode);",
+      "};",
+      "",
+      "process.once(\"SIGINT\", () => { void __ce_exit(130); });",
+      "process.once(\"SIGTERM\", () => { void __ce_exit(143); });",
+      "",
+      "const __ce_main = async () => {",
+      body,
+      "};",
+      "",
+      "__ce_main()",
+      "  .catch((err) => {",
+      "    console.error(err);",
+      "    if (process.exitCode === undefined) {",
+      "      process.exitCode = 1;",
+      "    }",
+      "  })",
+      "  .finally(() => {",
+      "    void __ce_exit();",
+      "  });",
+    ].join("\n");
+
+    finalCode = [imports, wrappedBody].filter((p) => p && p.trim().length > 0).join("\n\n");
+
+    // Prepare environment with debug flag if enabled
+    const env: Record<string, string> = {};
+    if (effectiveDebug) {
+      env.CODE_EXECUTOR_DEBUG = "1";
+    }
+
+    const result = await executeCodeWithEnv(finalCode, effectiveTimeout, env);
+
+    // Save the replay as a new execution record
+    const newRecord = addExecutionRecord(
+      record.code,
+      result,
+      { validated: false, debug: effectiveDebug, timeout: effectiveTimeout }
+    );
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            replayedFrom: id,
+            newExecutionId: newRecord.id,
+            exitCode: result.exitCode,
+            stdout: result.stdout,
+            stderr: result.stderr,
+          }, null, 2),
+        },
+      ],
+      isError: result.exitCode !== 0,
+    };
+  }
+);
+
+// =============================================================================
+// TOOL: execute_batch
+// =============================================================================
+server.tool(
+  "execute_batch",
+  "Execute multiple code snippets in parallel. Useful for running independent operations concurrently.",
+  {
+    snippets: z.array(z.object({
+      id: z.string().describe("Unique identifier for this snippet"),
+      code: z.string().describe("TypeScript code to execute"),
+    })).describe("Array of code snippets to execute"),
+    timeout: z.number().optional().describe("Execution timeout in milliseconds for each snippet (default: 120000)"),
+    validate: z.boolean().optional().describe("Validate TypeScript syntax before execution (default: true)"),
+    debug: z.boolean().optional().describe("Enable debug logging (default: false)"),
+  },
+  async ({ snippets, timeout = 120000, validate = true, debug = false }) => {
+    const blocked = requireGetStarted();
+    if (blocked) return blocked;
+
+    if (snippets.length === 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              error: "No snippets provided",
+              hint: "Provide at least one snippet with { id, code } in the snippets array.",
+            }, null, 2),
+          },
+        ],
+        isError: true,
+      };
+    }
+
+    // Execute all snippets in parallel
+    const results = await Promise.all(
+      snippets.map(async (snippet) => {
+        try {
+          // Validate if enabled
+          if (validate) {
+            const validationResult = await validateTypeScript(snippet.code);
+            if (!validationResult.valid) {
+              let processedErrors = validationResult.errors || "Unknown validation error";
+              processedErrors = mapValidationErrors(processedErrors, `_validate_`);
+              processedErrors = addValidationHints(processedErrors);
+              
+              return {
+                id: snippet.id,
+                exitCode: 1,
+                stdout: "",
+                stderr: `TypeScript validation failed:\n${processedErrors}`,
+                validationFailed: true,
+              };
+            }
+          }
+
+          // Hoist imports and wrap code
+          const { imports, body } = hoistImports(snippet.code);
+          
+          const wrappedBody = [
+            "import { disconnectAll as __ce_disconnectAll } from \"../src/mcp.js\";",
+            "",
+            "let __ce_cleaned = false;",
+            "const __ce_cleanup = async () => {",
+            "  if (__ce_cleaned) return;",
+            "  __ce_cleaned = true;",
+            "  try {",
+            "    await __ce_disconnectAll();",
+            "  } catch (err) {",
+            "    console.error(\"[code-executor] Cleanup error:\", err);",
+            "  }",
+            "};",
+            "",
+            "const __ce_exit = async (code?: number) => {",
+            "  await __ce_cleanup();",
+            "  const exitCode = code ?? (process.exitCode ?? 0);",
+            "  process.exit(exitCode);",
+            "};",
+            "",
+            "process.once(\"SIGINT\", () => { void __ce_exit(130); });",
+            "process.once(\"SIGTERM\", () => { void __ce_exit(143); });",
+            "",
+            "const __ce_main = async () => {",
+            body,
+            "};",
+            "",
+            "__ce_main()",
+            "  .catch((err) => {",
+            "    console.error(err);",
+            "    if (process.exitCode === undefined) {",
+            "      process.exitCode = 1;",
+            "    }",
+            "  })",
+            "  .finally(() => {",
+            "    void __ce_exit();",
+            "  });",
+          ].join("\n");
+
+          const finalCode = [imports, wrappedBody].filter((p) => p && p.trim().length > 0).join("\n\n");
+
+          // Prepare environment
+          const env: Record<string, string> = {};
+          if (debug) {
+            env.CODE_EXECUTOR_DEBUG = "1";
+          }
+
+          const result = await executeCodeWithEnv(finalCode, timeout, env);
+
+          // Save to history
+          const executionRecord = addExecutionRecord(
+            snippet.code,
+            result,
+            { validated: validate, debug, timeout }
+          );
+
+          return {
+            id: snippet.id,
+            executionId: executionRecord.id,
+            exitCode: result.exitCode,
+            stdout: result.stdout,
+            stderr: result.stderr,
+          };
+        } catch (error) {
+          return {
+            id: snippet.id,
+            exitCode: 1,
+            stdout: "",
+            stderr: `Execution error: ${error instanceof Error ? error.message : String(error)}`,
+          };
+        }
+      })
+    );
+
+    // Summary
+    const successful = results.filter(r => r.exitCode === 0).length;
+    const failed = results.length - successful;
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            results,
+            summary: {
+              total: results.length,
+              successful,
+              failed,
+            },
+          }, null, 2),
+        },
+      ],
+      isError: failed > 0,
+    };
   }
 );
 

@@ -231,3 +231,22 @@ export function toCallFunctionName(str: string): string {
   const camel = toCamelCase(str);
   return camel + "Call";
 }
+
+/**
+ * Safely format error details for JSON output.
+ * Handles Error instances with name, message, and stack.
+ * Uses JSON.stringify consistently for all error formatting.
+ *
+ * @param error - The error to format (can be Error instance or any other value)
+ * @returns A JSON-safe string representation of the error
+ */
+export function formatErrorForJson(error: unknown): string {
+  if (error instanceof Error) {
+    return JSON.stringify({
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    });
+  }
+  return JSON.stringify(String(error));
+}

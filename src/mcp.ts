@@ -1,6 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { loadConfig, isServerEnabled, type Config, type ServerConfig } from "./config.js";
+import { formatErrorForJson } from "./helpers.js";
 import { spawn, execSync } from "node:child_process";
 import { access } from "node:fs/promises";
 import { dirname } from "node:path";
@@ -20,6 +21,10 @@ const serverStderr = new Map<string, string>();
 
 // Store connected clients by server name
 const clients = new Map<string, Client>();
+
+// Track connection timestamps and durations for connection pooling status
+const connectionTimestamps = new Map<string, Date>();
+const connectionDurations = new Map<string, number>();
 
 // Cached config
 let cachedConfig: Config | null = null;
@@ -269,13 +274,17 @@ export async function connectServer(serverName: string): Promise<Client> {
       );
 
       // Connect with timeout
+      const connectStartTime = Date.now();
       await withTimeout(
         client.connect(transport),
         timeout,
         `Connection timed out after ${timeout}ms. The server process may be slow to start or not responding.`
       );
+      const connectionTime = Date.now() - connectStartTime;
 
       clients.set(serverName, client);
+      connectionTimestamps.set(serverName, new Date());
+      connectionDurations.set(serverName, connectionTime);
       return client;
     } catch (err) {
       lastError = err as Error;
@@ -494,9 +503,13 @@ export async function callTool(
       ? `\n\nHints:\n${hints.map(h => `  • ${h}`).join("\n")}`
       : "";
     
+    // Use formatErrorForJson for safe error formatting
+    const formattedError = formatErrorForJson(err);
+    
     throw new Error(
       `Failed to call tool "${toolName}" on server "${serverName}".\n` +
-      `Error: ${errorMessage}\n\n` +
+      `Error: ${errorMessage}\n` +
+      `Error details: ${formattedError}\n\n` +
       `Arguments provided:\n${argsStr}` +
       `\nTimeout: ${callTimeout}ms${hintsSection}\n\n` +
       `Debugging steps:\n` +
@@ -569,6 +582,8 @@ export async function disconnectAll(): Promise<void> {
   await Promise.all(closePromises);
   clients.clear();
   serverStderr.clear();
+  connectionTimestamps.clear();
+  connectionDurations.clear();
   cachedConfig = null;
 }
 
@@ -702,12 +717,33 @@ export async function testServerConnection(serverName: string): Promise<{
 }
 
 /**
+ * Get connection status info for a server
+ */
+export function getConnectionStatus(serverName: string): {
+  connected: boolean;
+  lastConnected?: Date;
+  connectionTimeMs?: number;
+} {
+  const connected = clients.has(serverName);
+  const lastConnected = connectionTimestamps.get(serverName);
+  const connectionTimeMs = connectionDurations.get(serverName);
+  
+  return {
+    connected,
+    lastConnected,
+    connectionTimeMs,
+  };
+}
+
+/**
  * List all configured servers with their status
  */
 export async function listConfiguredServers(): Promise<Array<{
   name: string;
   enabled: boolean;
   connected: boolean;
+  lastConnected?: Date;
+  connectionTimeMs?: number;
   command: string;
   tags?: string[];
 }>> {
@@ -716,15 +752,20 @@ export async function listConfiguredServers(): Promise<Array<{
     name: string;
     enabled: boolean;
     connected: boolean;
+    lastConnected?: Date;
+    connectionTimeMs?: number;
     command: string;
     tags?: string[];
   }> = [];
 
   for (const [name, serverConfig] of Object.entries(config.servers)) {
+    const connectionStatus = getConnectionStatus(name);
     result.push({
       name,
       enabled: isServerEnabled(serverConfig),
-      connected: clients.has(name),
+      connected: connectionStatus.connected,
+      lastConnected: connectionStatus.lastConnected,
+      connectionTimeMs: connectionStatus.connectionTimeMs,
       command: serverConfig.command,
       tags: serverConfig.tags,
     });
