@@ -612,131 +612,167 @@ server.tool(
 Code Executor MCP lets you write TypeScript code that calls MCP tools from connected servers.
 Instead of calling tools directly, you write code that imports generated wrapper files.
 
-## ⚡ Essential Workflow
+---
 
-### Step 1: Discover Available Servers
+## ⚠️ MANDATORY WORKFLOW - Follow ALL Steps In Order!
+
+### Step 1: list_available_servers (REQUIRED FIRST)
 \`\`\`
 Tool: list_available_servers
-→ Shows servers with status: "ready", "disabled", or "no-wrapper"
 \`\`\`
+**Purpose**: Shows which servers are ready to use
+- **"ready"** → Server wrapper exists, you can proceed
+- **"disabled"** → Server is disabled in mcp.json
+- **"no-wrapper"** → Need to run \`pnpm run gen\` first
 
-### Step 2: List Tools for a Server
+⚠️ **DO NOT SKIP THIS STEP** - You must know which servers are available before proceeding!
+
+### Step 2: list_server_tools (REQUIRED BEFORE execute_code)
 \`\`\`
 Tool: list_server_tools
-Args: { "server": "context7" }
-→ Shows tools with import examples and parameters
+Args: { "server": "YOUR_SERVER_NAME" }
 \`\`\`
+**Purpose**: Shows EXACT import paths and tool names you must use
+- Shows the **exact import statement** to copy
+- Shows **required vs optional** parameters
+- Shows **enum values** if any exist
 
-### Step 3: Get Full Schema (if needed)
-\`\`\`
-Tool: get_tool_schema
-Args: { "server": "context7", "tool": "get-library-docs" }
-→ Shows complete parameter details including enum values
-\`\`\`
+⚠️ **COPY THE IMPORT STATEMENT FROM THIS OUTPUT** - Don't guess the import path!
 
-### Step 4: Execute Code
+### Step 3: execute_code (Only After Steps 1-2!)
 \`\`\`
 Tool: execute_code
-Args: { "code": "..." }
+Args: { "code": "YOUR_CODE", "debug": true }
 \`\`\`
+**Tips**:
+- Use \`debug: true\` to see connection/call progress
+- Always include \`console.log()\` to see results
+- Results ONLY appear via console.log - return values are not shown
+
+---
 
 ## ✅ Correct Import Patterns
 
 \`\`\`typescript
-// Pattern 1: Import entire server
-import * as context7 from '../servers/context7/index.js';
-await context7.resolveLibraryId.call({ libraryName: "react" });
-
-// Pattern 2: Import specific tool
+// ✅ Pattern 1: Import callable tools (RECOMMENDED)
 import { resolveLibraryId } from '../servers/context7/index.js';
-await resolveLibraryId.call({ libraryName: "react" });
+const result = await resolveLibraryId({ libraryName: "react" });
 
-// Pattern 3: Direct file import
-import * as tool from '../servers/context7/resolve-library-id.js';
-await tool.call({ libraryName: "react" });
-\`\`\`
+// ✅ Pattern 2: Import with .call() (also works)
+import { resolveLibraryId } from '../servers/context7/index.js';
+const result = await resolveLibraryId.call({ libraryName: "react" });
 
-## ❌ Common Mistakes (AVOID THESE!)
-
-| Mistake | Why It Fails |
-|---------|--------------|
-| \`import { x } from '../servers/context7'\` | Missing \`/index.js\` - ESM requires explicit paths |
-| \`import { x } from '../servers/context7/index'\` | Missing \`.js\` extension |
-| \`await resolveLibraryId({ ... })\` | Must use \`.call()\` - it's an object, not a function |
-| \`import { context7Tools } from ...\` | Export doesn't exist - use actual tool names |
-
-## 📝 Code Template
-
-\`\`\`typescript
-// Minimal working example
-import * as server from '../servers/YOUR_SERVER/index.js';
-
-const result = await server.yourTool.call({
-  param1: "value1",
-  // ... other required params
-});
-
-console.log(JSON.stringify(result, null, 2));
-\`\`\`
-
-## 🔧 Key Features
-
-- **validate: true** (default) - Validates TypeScript syntax before execution to catch errors early
-- **autoExit: true** (default) - Automatically cleans up MCP connections
-- **timeout: 120000** (default) - Execution timeout in ms
-- Set \`validate: false\` to skip validation for faster execution when you're confident in your code
-
-## 📚 Available Tools
-
-| Tool | Purpose |
-|------|---------|
-| \`get_started\` | This tutorial |
-| \`list_available_servers\` | See ready servers |
-| \`list_servers\` | List server wrappers |
-| \`list_server_tools\` | See tools + params |
-| \`get_tool_schema\` | Full param schema |
-| \`execute_code\` | Run TypeScript |
-| \`run_script\` | Run script file |
-| \`validate_code\` | Check syntax |
-| \`list_skills\` | Knowledge packages |
-| \`list_skills_metadata\` | Skills overview |
-| \`read_skill\` | Read skill docs |
-| \`list_servers_metadata\` | Servers overview |
-| \`list_workspace_files\` | List workspace |
-| \`read_workspace_file\` | Read workspace file |
-| \`list_scripts\` | List scripts |
-| \`check_server_health\` | Diagnose server |
-| \`test_server_connection\` | Test connection |
-| \`get_server_stderr\` | Debug stderr |
-
-## 🚀 Quick Example: Context7 Documentation
-
-\`\`\`typescript
+// ✅ Pattern 3: Import entire server
 import * as context7 from '../servers/context7/index.js';
+const result = await context7.resolveLibraryId({ libraryName: "react" });
+
+// ✅ Pattern 4: Direct file import
+import * as tool from '../servers/context7/resolve-library-id.js';
+const result = await tool.call({ libraryName: "react" });
+\`\`\`
+
+---
+
+## ❌ Common Mistakes & Fixes
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| \`Cannot find module '../servers/X'\` | Missing \`/index.js\` | Add \`/index.js\` to import path |
+| \`Cannot find module '../servers/X/index'\` | Missing \`.js\` extension | Add \`.js\` extension |
+| \`X is not exported from module\` | Wrong export name | Use \`list_server_tools\` to get correct name |
+| \`is not a function\` | Using wrong call pattern | Use \`tool({ args })\` or \`tool.call({ args })\` |
+| Execution hangs (no output) | Server not responding | Use \`debug: true\` to diagnose |
+| Only first console.log appears | Code error after first log | Check stderr for errors |
+
+---
+
+## 🔧 Debugging Hanging Execution
+
+If your code hangs (no output after initial log), use debug mode:
+
+\`\`\`
+execute_code({
+  code: "...",
+  debug: true  // ← Enables verbose logging
+})
+\`\`\`
+
+Debug output shows:
+- \`[server] Connecting...\` - Starting connection
+- \`[server] Calling toolName...\` - Making tool call
+- \`[server] Call completed.\` - Tool returned
+
+If it hangs at "Connecting", use these diagnostic tools:
+\`\`\`
+check_server_health({ server: "server-name" })
+test_server_connection({ server: "server-name" })
+get_server_stderr({ server: "server-name" })
+\`\`\`
+
+---
+
+## 📝 Complete Example (Follow This Pattern!)
+
+\`\`\`typescript
+// I called list_available_servers and saw "context7" is "ready"
+// I called list_server_tools("context7") and copied this import:
+import { resolveLibraryId, getLibraryDocs } from '../servers/context7/index.js';
 
 // Step 1: Find library ID
-const libs = await context7.resolveLibraryId.call({
-  libraryName: "react"
-});
-console.log("Libraries:", JSON.stringify(libs, null, 2));
+const libs = await resolveLibraryId({ libraryName: "react" });
+console.log("Libraries found:", JSON.stringify(libs, null, 2));
 
-// Step 2: Get docs (use ID from step 1)
-const docs = await context7.getLibraryDocs.call({
+// Step 2: Get docs using ID from step 1
+// (In real code, extract the ID from libs result first)
+const docs = await getLibraryDocs({
   context7CompatibleLibraryID: "/facebook/react",
   topic: "hooks useState"
 });
-console.log("Docs:", docs);
+console.log("Documentation:", docs);
 \`\`\`
 
-## ⚠️ Important Notes
+---
 
-1. **Server names match config**: Folder names match the server name in \`mcp.json\` (e.g., \`context7\`)
-2. **Always use \`.call()\`**: Tools are namespace objects with \`{ TOOL_NAME, SCHEMA, call }\`
-3. **Check required params**: Use \`list_server_tools\` to see required vs optional
-4. **Enum values**: Use \`get_tool_schema\` to see valid enum values
+## 🔧 Key Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| \`validate\` | true | TypeScript syntax check before execution |
+| \`debug\` | false | Verbose logging for MCP connections |
+| \`timeout\` | 120000 | Execution timeout in milliseconds |
+| \`autoExit\` | true | Auto-cleanup MCP connections when done |
 
 ---
-Call \`list_available_servers\` next to see what's ready to use!
+
+## 📚 Available Tools Reference
+
+| Category | Tool | Purpose |
+|----------|------|---------|
+| **Discovery** | \`list_available_servers\` | See ready servers (CALL FIRST!) |
+| **Discovery** | \`list_server_tools\` | See tools & imports (CALL BEFORE execute_code!) |
+| **Discovery** | \`get_tool_schema\` | Full parameter schema with enums |
+| **Execution** | \`execute_code\` | Run TypeScript code |
+| **Execution** | \`run_script\` | Run script from scripts/ |
+| **Execution** | \`validate_code\` | Check syntax without running |
+| **Diagnostics** | \`check_server_health\` | Server config & status |
+| **Diagnostics** | \`test_server_connection\` | Test fresh connection |
+| **Diagnostics** | \`get_server_stderr\` | Server error output |
+| **Skills** | \`list_skills\` | Available knowledge packs |
+| **Skills** | \`read_skill\` | Read skill documentation |
+
+---
+
+## ⚠️ REMEMBER
+
+1. **ALWAYS call list_available_servers first** to verify server is "ready"
+2. **ALWAYS call list_server_tools second** to get exact import paths
+3. **COPY import statements** from list_server_tools output - don't guess!
+4. **Use debug: true** when execution hangs to see where it stalls
+5. **Use console.log()** to see results - return values are not shown
+
+---
+
+**NEXT STEP**: Call \`list_available_servers\` now to see what's ready!
 `;
 
     return {
@@ -749,6 +785,115 @@ Call \`list_available_servers\` next to see what's ready to use!
     };
   }
 );
+
+// Helper: Execute TypeScript code via tsx with optional debug environment
+async function executeCodeWithEnv(
+  code: string,
+  timeout: number = 120000,
+  env?: Record<string, string>
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  await ensureDir(WORKSPACE_DIR);
+
+  // Create a temporary script file
+  const tempFile = join(WORKSPACE_DIR, `_temp_${Date.now()}.ts`);
+  await writeFile(tempFile, code, "utf-8");
+
+  return new Promise((resolve) => {
+    let resolved = false;
+    let timeoutId: NodeJS.Timeout | null = null;
+
+    const child = spawn("npx", ["tsx", tempFile], {
+      cwd: PROJECT_ROOT,
+      env: { ...process.env, ...env },
+      shell: true,
+    });
+
+    let stdout = "";
+    let stderr = "";
+    const startTime = Date.now();
+    let lastOutputAt = startTime;
+
+    const cleanup = async () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      await unlink(tempFile).catch(() => { });
+    };
+
+    const resolveOnce = async (result: { exitCode: number; stdout: string; stderr: string }) => {
+      if (resolved) return;
+      resolved = true;
+      await cleanup();
+      resolve(result);
+    };
+
+    timeoutId = setTimeout(() => {
+      if (resolved) return;
+
+      if (child.pid) {
+        killProcessTree(child.pid);
+      }
+
+      const timeSinceLastOutput = Date.now() - lastOutputAt;
+      const totalRuntime = Date.now() - startTime;
+      const hadAnyOutput = stdout.length > 0 || stderr.length > 0;
+      const likelyInfiniteLoop = timeSinceLastOutput > (timeout * 0.8);
+
+      let diagnosis: string;
+      let tip: string;
+
+      if (!hadAnyOutput) {
+        diagnosis = "NO OUTPUT - Likely INFINITE LOOP or code blocked before any output";
+        tip = "Check for infinite loops, blocking operations, or missing console.log statements";
+      } else if (likelyInfiniteLoop) {
+        diagnosis = "STALLED - Code produced output but then stopped (possible infinite loop after initial work)";
+        tip = "Check for infinite loops or blocking operations after the last output";
+      } else {
+        diagnosis = "SLOW OPERATION - Code was actively producing output when timeout hit";
+        tip = "Increase timeout with { timeout: 120000 } parameter";
+      }
+
+      resolveOnce({
+        exitCode: 124,
+        stdout,
+        stderr: stderr +
+          `\n[TIMEOUT] Execution exceeded ${timeout}ms limit.` +
+          `\n  Total runtime: ${totalRuntime}ms` +
+          `\n  Time since last output: ${timeSinceLastOutput}ms` +
+          `\n  Had output: ${hadAnyOutput}` +
+          `\n  Diagnosis: ${diagnosis}` +
+          `\n  Tip: ${tip}`,
+      });
+    }, timeout);
+
+    child.stdout.on("data", (data: Buffer) => {
+      stdout += data.toString();
+      lastOutputAt = Date.now();
+    });
+
+    child.stderr.on("data", (data: Buffer) => {
+      stderr += data.toString();
+      lastOutputAt = Date.now();
+    });
+
+    child.on("error", (err: Error) => {
+      resolveOnce({
+        exitCode: 1,
+        stdout,
+        stderr: stderr + `\nExecution error: ${err.message}`,
+      });
+    });
+
+    child.on("close", (code: number | null) => {
+      resolveOnce({
+        exitCode: code ?? 1,
+        stdout,
+        stderr,
+      });
+    });
+  });
+}
 
 // =============================================================================
 // TOOL: execute_code
@@ -767,8 +912,12 @@ server.tool(
       .boolean()
       .optional()
       .describe("Validate TypeScript syntax before execution (default: true). Set to false to skip validation for faster execution."),
+    debug: z
+      .boolean()
+      .optional()
+      .describe("Enable verbose debug logging for MCP connections and tool calls (default: false). Use this to diagnose hanging executions."),
   },
-  async ({ code, timeout, autoExit = true, validate = true }) => {
+  async ({ code, timeout, autoExit = true, validate = true, debug = false }) => {
     // BLOCK execution if get_started hasn't been called yet
     if (!hasCalledGetStarted) {
       return {
@@ -865,7 +1014,13 @@ Then come back to execute_code.`,
       finalCode = [imports, body].filter((p) => p && p.trim().length > 0).join("\n\n");
     }
 
-    const result = await executeCode(finalCode, effectiveTimeout);
+    // Prepare environment with debug flag if enabled
+    const env: Record<string, string> = {};
+    if (debug) {
+      env.CODE_EXECUTOR_DEBUG = "1";
+    }
+
+    const result = await executeCodeWithEnv(finalCode, effectiveTimeout, env);
 
     // Add helpful hint on common import errors
     let hint = "";

@@ -352,11 +352,17 @@ import { callTool, connectServer, parseMcpResponse } from "../../src/mcp.js";
 /** Original MCP tool name */
 export const TOOL_NAME = "${toolName}";
 
+/** Server name for this tool */
+export const SERVER_NAME = "${serverName}";
+
 /**
  * Full JSON Schema for tool parameters.
  * Use this to discover required parameters, types, and valid enum values.
  */
 export const SCHEMA = ${schemaStr} as const;
+
+/** Check if debug mode is enabled via environment variable */
+const isDebug = () => process.env.CODE_EXECUTOR_DEBUG === "1";
 
 /**
  * ${desc}
@@ -370,8 +376,13 @@ export const SCHEMA = ${schemaStr} as const;
  * const result = await call(${exampleArgs}, { timeout: 30000 });
  */
 export async function call(args: ${argsType}, options?: { timeout?: number }): Promise<unknown> {
+  if (isDebug()) console.log(\`[${serverName}] Connecting...\`);
   await connectServer("${serverName}");
+  
+  if (isDebug()) console.log(\`[${serverName}] Calling ${toolName}...\`);
   const result = await callTool("${serverName}", "${toolName}", args, options?.timeout);
+  
+  if (isDebug()) console.log(\`[${serverName}] Call completed.\`);
   return parseMcpResponse(result);
 }
 `;
@@ -393,6 +404,9 @@ function generateToolDeclaration(serverName: string, tool: Tool): string {
 
 /** Original MCP tool name */
 export declare const TOOL_NAME: "${toolName}";
+
+/** Server name for this tool */
+export declare const SERVER_NAME: "${serverName}";
 
 /**
  * Full JSON Schema for tool parameters.
