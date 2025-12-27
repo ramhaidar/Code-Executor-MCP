@@ -27,6 +27,16 @@
                 "context7",
                 "mcp"
             ]
+        },
+        "code-executor-troubleshooting": {
+            "enabled": true,
+            "path": "./skills/code-executor-troubleshooting",
+            "tags": [
+                "mcp",
+                "troubleshooting",
+                "debugging",
+                "code-executor"
+            ]
         }
     }
 }
